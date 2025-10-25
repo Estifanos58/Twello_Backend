@@ -63,8 +63,7 @@ async function startServer() {
 
             return {
               user: {
-                id: payload.userId,
-                email: payload.email,
+                id: payload.sub,
                 role: payload.role,
               },
             };
@@ -133,8 +132,7 @@ async function startServer() {
 
             return {
               user: {
-                id: payload.userId,
-                email: payload.email,
+                id: payload.sub,
                 role: payload.role,
               },
               req,
