@@ -1,4 +1,5 @@
 import { authMutations } from './auth.js';
+import { workspaceMutations } from './workspace.js';
 import { GraphQLError } from 'graphql';
 
 interface Context {
@@ -9,74 +10,8 @@ interface Context {
 
 export const mutationResolvers = {
   Mutation: {
-    // Import all auth mutations
     ...authMutations,
-    
-    // Other mutations can be added here
-    // Workspace mutations
-    createWorkspace: async (_: any, { name }: { name: string }, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement create workspace logic
-      throw new GraphQLError('Not implemented', {
-        extensions: { code: 'NOT_IMPLEMENTED' },
-      });
-    },
-
-    updateWorkspace: async (_: any, { id, name }: { id: string; name: string }, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement update workspace logic
-      throw new GraphQLError('Not implemented', {
-        extensions: { code: 'NOT_IMPLEMENTED' },
-      });
-    },
-
-    deleteWorkspace: async (_: any, { id }: { id: string }, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement delete workspace logic
-      return true;
-    },
-
-    addWorkspaceMember: async (_: any, { workspaceId, userId, role }: any, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement add workspace member logic
-      return true;
-    },
-
-    removeWorkspaceMember: async (_: any, { workspaceId, userId }: any, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement remove workspace member logic
-      return true;
-    },
-
-    updateWorkspaceMemberRole: async (_: any, { workspaceId, userId, role }: any, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement update workspace member role logic
-      return true;
-    },
+    ...workspaceMutations,
 
     // Project mutations
     createProject: async (_: any, { workspaceId, name, description }: any, context: Context) => {
