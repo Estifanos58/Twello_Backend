@@ -1,86 +1,110 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyAccessToken } from '../utils/jwt.js';
-import { log } from '../services/logger/index.js';
+import { verifyAccessToken, AccessTokenPayload } from '../utils/jwt.js';
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: string;
-    [key: string]: any;
-  };
+// Extend Express Request to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        role: string;
+      };
+    }
+  }
 }
 
 /**
- * Middleware to authenticate requests using JWT
+ * Extract and verify JWT from Authorization header
  */
-export async function authMiddleware(
-  req: AuthRequest,
+export async function authenticateToken(
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    // Get token from Authorization header
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
-    if (!token) {
-      res.status(401).json({ error: 'Authentication required' });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'No token provided' });
       return;
     }
 
-    // Verify token
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
     const payload = await verifyAccessToken(token);
-
-    if (!payload) {
-      res.status(401).json({ error: 'Invalid or expired token' });
-      return;
-    }
 
     // Attach user to request
     req.user = {
-      id: payload.userId as string,
-      email: payload.email as string,
-      role: payload.role as string,
+      id: payload.sub,
+      role: payload.role,
     };
 
     next();
   } catch (error) {
-    log({
-      level: 'error',
-      action: 'Authentication failed',
-      details: { error: error instanceof Error ? error.message : String(error) },
-    });
-    res.status(401).json({ error: 'Authentication failed' });
+    res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
 /**
- * Optional authentication middleware - doesn't fail if no token
+ * Optional authentication - doesn't fail if token is missing
  */
-export async function optionalAuthMiddleware(
-  req: AuthRequest,
+export async function optionalAuth(
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
-    if (token) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
       const payload = await verifyAccessToken(token);
-      if (payload) {
-        req.user = {
-          id: payload.userId as string,
-          email: payload.email as string,
-          role: payload.role as string,
-        };
-      }
+
+      req.user = {
+        id: payload.sub,
+        role: payload.role,
+      };
     }
 
     next();
   } catch (error) {
-    // Silent fail for optional auth
+    // Continue without user
     next();
   }
+}
+
+/**
+ * Require admin role
+ */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  if (req.user.role !== 'ADMIN') {
+    res.status(403).json({ error: 'Admin access required' });
+    return;
+  }
+
+  next();
+}
+
+/**
+ * Get client IP address
+ */
+export function getClientIp(req: Request): string {
+  return (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    (req.headers['x-real-ip'] as string) ||
+    req.socket.remoteAddress ||
+    'unknown'
+  );
+}
+
+/**
+ * Get user agent
+ */
+export function getUserAgent(req: Request): string {
+  return req.headers['user-agent'] || 'unknown';
 }
