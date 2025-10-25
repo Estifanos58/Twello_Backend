@@ -1,3 +1,4 @@
+import { authMutations } from './auth.js';
 import { GraphQLError } from 'graphql';
 
 interface Context {
@@ -8,38 +9,10 @@ interface Context {
 
 export const mutationResolvers = {
   Mutation: {
-    // Authentication mutations
-    register: async (_: any, { email, password, fullName }: { email: string; password: string; fullName?: string }) => {
-      // TODO: Implement registration logic
-      throw new GraphQLError('Not implemented', {
-        extensions: { code: 'NOT_IMPLEMENTED' },
-      });
-    },
-
-    login: async (_: any, { email, password }: { email: string; password: string }, context: Context) => {
-      // TODO: Implement login logic
-      throw new GraphQLError('Not implemented', {
-        extensions: { code: 'NOT_IMPLEMENTED' },
-      });
-    },
-
-    logout: async (_: any, __: any, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError('Not authenticated', {
-          extensions: { code: 'UNAUTHENTICATED' },
-        });
-      }
-      // TODO: Implement logout logic
-      return true;
-    },
-
-    refreshToken: async (_: any, __: any, context: Context) => {
-      // TODO: Implement token refresh logic
-      throw new GraphQLError('Not implemented', {
-        extensions: { code: 'NOT_IMPLEMENTED' },
-      });
-    },
-
+    // Import all auth mutations
+    ...authMutations,
+    
+    // Other mutations can be added here
     // Workspace mutations
     createWorkspace: async (_: any, { name }: { name: string }, context: Context) => {
       if (!context.user) {
@@ -257,3 +230,4 @@ export const mutationResolvers = {
     },
   },
 };
+
