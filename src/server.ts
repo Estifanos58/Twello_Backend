@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import config from './config/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { log } from './services/logger/index.js';
+import authRoutes from './routes/auth.js';
 
 /**
  * Create and configure Express application
@@ -60,10 +61,14 @@ export function createServer(): Express {
       description: 'Collaborative project management backend',
       endpoints: {
         graphql: '/graphql',
+        auth: '/api/auth',
         health: '/health',
       },
     });
   });
+
+  // Auth routes
+  app.use('/api/auth', authRoutes);
 
   // 404 handler
   app.use(notFoundHandler);
