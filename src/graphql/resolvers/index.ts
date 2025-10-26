@@ -1,6 +1,8 @@
 import { queryResolvers } from '../queries/index.js';
 import { mutationResolvers } from '../mutations/index.js';
 import { subscriptionResolvers } from '../subscriptions/index.js';
+
+import { projectFieldResolvers } from './project.js';
 import { GraphQLScalarType, Kind } from 'graphql';
 
 // Custom DateTime scalar
@@ -33,4 +35,5 @@ export const resolvers = {
   ...queryResolvers,
   ...mutationResolvers,
   ...subscriptionResolvers,
+  ...projectFieldResolvers,
 };
