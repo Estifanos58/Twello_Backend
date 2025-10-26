@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
-import * as workspaceService from '../../services/workspaceService.js';
-import * as authz from '../../services/authorizationService.js';
+import * as workspaceService from '../../services/workspaceService.ts';
+import * as authz from '../../services/authorizationService.ts';
 
 interface Context {
   user?: { id: string; role: string };
