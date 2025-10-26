@@ -1,144 +1,188 @@
 # Twello Backend
 
-A modern, production-ready collaborative project management backend built with **Bun**, **Express**, **GraphQL**, and **PostgreSQL (Neon)**.
+A modern, scalable collaborative project management backend built with cutting-edge technologies for enterprise-grade applications.
 
-## 🚀 Features
+## 🚀 Overview
 
-- **GraphQL API** with Apollo Server
-- **WebSocket Subscriptions** for real-time updates
-- **JWT Authentication** with access and refresh tokens
+Twello is a comprehensive backend solution for collaborative project management, featuring real-time capabilities, robust authentication, and a flexible role-based access control system. Built with performance and security in mind, it provides a solid foundation for building modern project management applications.
+
+## ✨ Key Features
+
+- **GraphQL API** with Apollo Server for efficient data fetching
+- **Real-time Subscriptions** via WebSocket for live updates
+- **JWT-based Authentication** with secure token management
 - **PostgreSQL Database** with Neon serverless support
-- **Custom Logger** with Winston (file rotation + database logging)
-- **Rate Limiting** for API protection
-- **TypeScript** for type safety
-- **Bun Runtime** for blazing fast performance
+- **Role-based Access Control** (RBAC) for workspaces and projects
+- **Comprehensive Audit Logging** with Winston and database storage
+- **Rate Limiting** and security middleware
+- **TypeScript** for type safety and developer experience
+- **Bun Runtime** for exceptional performance
+
+## 🏗️ Architecture
+
+### Core Components
+
+- **Authentication System**: JWT tokens with refresh token rotation
+- **Workspace Management**: Multi-tenant workspaces with member roles
+- **Project Management**: Projects within workspaces with granular permissions
+- **Task Management**: Assignable tasks with status tracking
+- **Notification System**: Real-time notifications for user activities
+- **Device Management**: Session tracking and device revocation
+- **Audit System**: Comprehensive logging for compliance and debugging
+
+### Technology Stack
+
+- **Runtime**: Bun v1.0+
+- **Framework**: Express.js with TypeScript
+- **API**: GraphQL with Apollo Server
+- **Database**: PostgreSQL (Neon recommended)
+- **Authentication**: JWT with jose library
+- **Logging**: Winston with file rotation and database storage
+- **Validation**: Zod schemas
+- **Security**: Helmet, CORS, bcrypt, rate limiting
 
 ## 📁 Project Structure
 
 ```
 Twello/
 ├── src/
-│   ├── config/           # Application configuration
+│   ├── config/              # Application configuration
 │   │   └── index.ts
-│   ├── db/              # Database connection and utilities
-│   │   └── pool.ts
-│   ├── graphql/         # GraphQL layer
-│   │   ├── schemas/     # GraphQL schemas
-│   │   │   ├── index.ts
-│   │   │   ├── queries.ts
-│   │   │   ├── mutations.ts
-│   │   │   └── subscriptions.ts
-│   │   ├── queries/     # Query resolvers
-│   │   │   └── index.ts
-│   │   ├── mutations/   # Mutation resolvers
-│   │   │   └── index.ts
-│   │   ├── subscriptions/ # Subscription resolvers
-│   │   │   └── index.ts
-│   │   ├── resolvers/   # Combined resolvers
-│   │   │   └── index.ts
-│   │   └── schema.ts    # Main schema export
-│   ├── middleware/      # Express middleware
-│   │   ├── authMiddleware.ts
-│   │   └── errorHandler.ts
-│   ├── services/        # Business logic services
-│   │   └── logger/      # Custom logger
-│   │       └── index.ts
-│   ├── utils/           # Utility functions
-│   │   ├── jwt.ts
-│   │   ├── password.ts
-│   │   └── validation.ts
-│   ├── server.ts        # Express server setup
-│   └── index.ts         # Application entry point
-├── logs/                # Application logs (auto-generated)
-├── .env                 # Environment variables (create from .env.example)
-├── .env.example         # Environment variables template
-├── .gitignore
-├── .prettierrc
-├── .eslintrc.json
-├── package.json
-├── tsconfig.json
+│   ├── db/                  # Database connection and utilities
+│   │   ├── pool.ts          # Connection pooling with Neon support
+│   │   └── migrate.ts       # Database migration utilities
+│   ├── graphql/             # GraphQL layer
+│   │   ├── schemas/         # GraphQL type definitions
+│   │   │   ├── index.ts     # Core types and enums
+│   │   │   ├── queries.ts   # Query definitions
+│   │   │   ├── mutations.ts # Mutation definitions
+│   │   │   └── subscriptions.ts # Subscription definitions
+│   │   ├── queries/         # Query resolvers
+│   │   ├── mutations/       # Mutation resolvers
+│   │   ├── subscriptions/   # Subscription resolvers
+│   │   ├── resolvers/       # Field resolvers
+│   │   └── schema.ts        # Schema composition
+│   ├── middleware/          # Express middleware
+│   │   ├── authMiddleware.ts # JWT authentication
+│   │   └── errorHandler.ts  # Error handling
+│   │   ├── routes/          # REST API routes
+│   │   │   └── auth.ts      # Authentication endpoints
+│   ├── services/            # Business logic services
+│   │   ├── authorizationService.ts # RBAC logic
+│   │   ├── projectService.ts # Project operations
+│   │   ├── taskService.ts    # Task management
+│   │   ├── notificationService.ts # Notification handling
+│   │   ├── authService.ts    # Authentication logic
+│   │   ├── userService.ts    # User management
+│   │   ├── workspaceService.ts # Workspace operations
+│   │   └── logger/           # Logging service
+│   ├── utils/                # Utility functions
+│   │   ├── jwt.ts            # JWT utilities
+│   │   ├── password.ts       # Password hashing
+│   │   └── validation.ts     # Input validation
+│   ├── sql/                  # Database schemas and queries
+│   │   ├── schema.sql        # Complete database schema
+│   │   └── drop.sql          # Schema cleanup
+│   ├── server.ts             # Express server configuration
+│   └── index.ts              # Application entry point
+├── logs/                     # Application logs (auto-generated)
+├── .env                      # Environment variables
+├── .env.example              # Environment template
+├── package.json              # Dependencies and scripts
+├── tsconfig.json             # TypeScript configuration
 └── README.md
 ```
 
-## 🛠️ Setup Instructions
+## 🛠️ Installation & Setup
 
-### 1. Prerequisites
+### Prerequisites
 
-- **Bun** (v1.0.0 or higher) - [Install Bun](https://bun.sh)
-- **PostgreSQL** (Neon recommended) - [Get Neon](https://neon.tech)
+- **Bun** (v1.0.0 or higher) - [Installation Guide](https://bun.sh)
+- **PostgreSQL** database (Neon recommended for production)
 
-### 2. Install Dependencies
+### 1. Clone and Install
 
 ```bash
-cd Twello
+git clone <repository-url>
+cd twello
 bun install
 ```
 
-### 3. Configure Environment Variables
+### 2. Environment Configuration
 
-Create a `.env` file from the example:
+Create a `.env` file from the template:
 
 ```bash
 cp .env.example .env
 ```
 
-Update the `.env` file with your configuration:
+Configure the following essential variables:
 
 ```env
-# Database - Replace with your Neon connection string
+# Database Configuration
 DATABASE_URL=postgresql://username:password@ep-xxx-xxx.region.aws.neon.tech/twello?sslmode=require
 
-# JWT Secrets - Generate secure keys for production
-JWT_ACCESS_TOKEN_PRIVATE_KEY=your-super-secret-access-token-key
-JWT_REFRESH_TOKEN_PRIVATE_KEY=your-super-secret-refresh-token-key
+# JWT Security (Generate secure keys for production)
+JWT_ACCESS_TOKEN_PRIVATE_KEY=your-256-bit-secret-key-here
+JWT_REFRESH_TOKEN_PRIVATE_KEY=your-256-bit-secret-key-here
 
-# Other settings (optional)
+# Server Configuration
 PORT=4000
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:3000
 ```
 
-**Generate secure JWT secrets:**
+**Security Note**: Never use default JWT secrets in production. Generate cryptographically secure keys:
 
 ```bash
-# Linux/Mac
+# Generate 256-bit (64-character) hex keys
 openssl rand -hex 64
-
-# Or use Node.js
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
-### 4. Run Database Migrations
+### 3. Database Setup
+
+Run the database migrations to create the schema:
 
 ```bash
 bun run migrate
 ```
 
-### 5. Start the Development Server
+### 4. Development Server
+
+Start the development server with hot reload:
 
 ```bash
 bun run dev
 ```
 
-The server will start on `http://localhost:4000`
+The server will be available at `http://localhost:4000`
 
 ## 🔧 Available Scripts
 
-- `bun run dev` - Start development server with hot reload
-- `bun run start` - Start production server
-- `bun run migrate` - Run database migrations
-- `bun run test` - Run all tests
-- `bun run test:unit` - Run unit tests
-- `bun run lint` - Lint code with ESLint
-- `bun run format` - Format code with Prettier
-- `bun run type-check` - Type check with TypeScript
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start development server with hot reload |
+| `bun run start` | Start production server |
+| `bun run migrate` | Execute database migrations |
+| `bun run test` | Run test suite |
+| `bun run test:unit` | Run unit tests only |
+| `bun run test:e2e` | Run end-to-end tests |
+| `bun run lint` | Lint code with ESLint |
+| `bun run format` | Format code with Prettier |
+| `bun run type-check` | Run TypeScript type checking |
 
 ## 🌐 API Endpoints
 
+### GraphQL
+
 - **GraphQL Playground**: `http://localhost:4000/graphql`
-- **WebSocket**: `ws://localhost:4000/graphql`
-- **Health Check**: `http://localhost:4000/health`
-- **API Info**: `http://localhost:4000/`
+- **WebSocket Endpoint**: `ws://localhost:4000/graphql`
+
+### REST API
+
+- **Health Check**: `GET /health`
+- **API Info**: `GET /`
+- **Authentication**: `/api/auth/*`
 
 ## 🔐 Authentication
 
@@ -150,95 +194,232 @@ The API uses JWT-based authentication:
 
 ## 📊 GraphQL Schema
 
-The GraphQL schema is organized into separate files:
-
-- **Types & Enums** (`schemas/index.ts`) - Core types
-- **Queries** (`schemas/queries.ts`) - Read operations
-- **Mutations** (`schemas/mutations.ts`) - Write operations
-- **Subscriptions** (`schemas/subscriptions.ts`) - Real-time updates
-
-### Example Query
+### Core Types
 
 ```graphql
+type User {
+  id: ID!
+  email: String!
+  fullName: String
+  role: String!
+  globalStatus: GlobalStatus!
+  createdAt: DateTime!
+}
+
+type Workspace {
+  id: ID!
+  name: String!
+  members: [WorkspaceMember!]!
+  projects: [Project!]!
+  createdAt: DateTime!
+}
+
+type Project {
+  id: ID!
+  name: String!
+  description: String
+  workspaceId: ID!
+  members: [ProjectMembership!]!
+  tasks: [Task!]!
+  createdAt: DateTime!
+}
+
+type Task {
+  id: ID!
+  title: String!
+  description: String
+  status: TaskStatus!
+  assignees: [User!]!
+  createdAt: DateTime!
+}
+```
+
+### Authentication
+
+The API uses JWT-based authentication with the following flow:
+
+1. **Registration/Login** via GraphQL mutations
+2. **Token Storage** in HTTP-only cookies or Authorization header
+3. **Automatic Refresh** of access tokens using refresh tokens
+
+### Example Queries
+
+```graphql
+# Get current user profile
 query {
   me {
     id
     email
     fullName
   }
-  myWorkspaces {
-    id
+}
+
+# Fetch workspace with projects
+query {
+  getWorkspace(id: "workspace-uuid") {
     name
     projects {
       id
       name
+      tasks {
+        id
+        title
+        status
+      }
     }
   }
 }
 ```
 
-### Example Mutation
+### Example Mutations
 
 ```graphql
+# Create a new workspace
 mutation {
-  createWorkspace(name: "My Workspace") {
+  createWorkspace(name: "My Team Workspace") {
     id
     name
     createdAt
   }
 }
-```
 
-### Example Subscription
-
-```graphql
-subscription {
-  taskCreated(projectId: "123") {
+# Create and assign a task
+mutation {
+  createTask(
+    projectId: "project-uuid"
+    title: "Implement user authentication"
+    description: "Add JWT-based auth system"
+    assigneeIds: ["user-uuid"]
+  ) {
     id
     title
-    status
+    assignees {
+      id
+      fullName
+    }
   }
 }
 ```
 
-## 🗄️ Database
+### Real-time Subscriptions
 
-The application supports both:
+```graphql
+# Subscribe to task status updates
+subscription {
+  taskStatusUpdated(workspaceId: "workspace-uuid") {
+    id
+    title
+    status
+    updatedAt
+  }
+}
 
-- **Neon PostgreSQL** (serverless, recommended for production)
-- **Standard PostgreSQL** (local development)
+# Subscribe to notifications
+subscription {
+  notificationAdded(userId: "user-uuid") {
+    id
+    title
+    body
+    createdAt
+  }
+}
+```
 
-Connection is auto-detected based on the `DATABASE_URL`.
+## 🗄️ Database Schema
 
-## 📝 Logging
+The application uses a comprehensive PostgreSQL schema with the following key tables:
 
-Custom logger with multiple transports:
+- **users**: User accounts with roles and status
+- **workspaces**: Multi-tenant workspace containers
+- **workspace_members**: User roles within workspaces
+- **projects**: Projects within workspaces
+- **project_memberships**: Project-level permissions
+- **tasks**: Work items with assignees and status
+- **task_assignees**: Many-to-many task assignments
+- **notifications**: User notifications
+- **user_devices**: Session and device tracking
+- **audit_logs**: Comprehensive activity logging
 
-- **Console** (development only)
-- **File** (daily rotation, 14 days retention)
-- **Database** (audit_logs table)
+### Database Features
 
-Log levels: `info`, `warn`, `error`, `security`
+- **UUID Primary Keys** for scalability
+- **Foreign Key Constraints** with cascading deletes
+- **Indexes** on frequently queried columns
+- **Triggers** for automatic timestamp updates
+- **Row Level Security** considerations
+- **Extensions**: uuid-ossp, pgcrypto
 
-## 🔒 Security Features
+## 📝 Logging & Monitoring
 
-- Helmet.js for security headers
-- CORS configuration
-- Rate limiting (global + auth-specific)
-- JWT token encryption
-- Password hashing with bcrypt
-- Input validation with Zod
+Twello implements multi-transport logging:
 
-## 🚧 Next Steps
+- **Console Logging** for development
+- **File Rotation** (daily with 14-day retention)
+- **Database Storage** in audit_logs table
+- **Log Levels**: info, warn, error, security
+- **Categories**: USER_LOG, SYSTEM_LOG, ACTIVITY_TRACKER
 
-This is a boilerplate setup. You'll need to implement:
+## � Security Features
 
-1. **Database schema** (create tables in Neon)
-2. **Service layer** (business logic for workspaces, projects, tasks)
-3. **Complete resolvers** (currently showing placeholder implementations)
-4. **Tests** (unit and E2E tests)
-5. **Authorization** (role-based access control)
+- **Helmet.js** for security headers
+- **CORS** configuration with origin validation
+- **Rate Limiting** (global and auth-specific)
+- **JWT Encryption** with secure key management
+- **Password Hashing** with bcrypt
+- **Input Validation** with Zod schemas
+- **SQL Injection Prevention** via parameterized queries
+- **Audit Logging** for compliance
+
+## � Deployment
+
+### Production Checklist
+
+- [ ] Set `NODE_ENV=production`
+- [ ] Configure secure JWT secrets
+- [ ] Set up PostgreSQL database (Neon recommended)
+- [ ] Configure CORS origins
+- [ ] Set up SSL/TLS certificates
+- [ ] Configure rate limiting thresholds
+- [ ] Set up log aggregation
+- [ ] Configure monitoring and alerts
+
+### Environment Variables
+
+See `.env.example` for all available configuration options.
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+bun run test
+
+# Run unit tests only
+bun run test:unit
+
+# Run E2E tests
+bun run test:e2e
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
 
 ## 📄 License
 
-MIT
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For support and questions:
+- Create an issue in the repository
+- Check the documentation
+- Review the GraphQL schema for API details
+
+---
+
+**Built with ❤️ using modern web technologies**
