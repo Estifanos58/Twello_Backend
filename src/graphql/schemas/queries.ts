@@ -5,23 +5,26 @@ export const queriesSchema = `#graphql
 
     # User queries
     me: User
-    user(id: ID!): User
 
     # Workspace queries
-    workspace(id: ID!): Workspace
-    myWorkspaces: [Workspace!]!
+    getWorkspace(id: ID!): Workspace
+    getUserWorkspaces: [Workspace!]!
+    getAllWorkspaces: [Workspace!]! # Admin only
 
     # Project queries
-    project(id: ID!): Project
-    projectsByWorkspace(workspaceId: ID!): [Project!]!
+    getProject(id: ID!): Project
+    getWorkspaceProjects(workspaceId: ID!): [Project!]!
 
     # Task queries
-    task(id: ID!): Task
-    tasksByProject(projectId: ID!): [Task!]!
-    myTasks: [Task!]!
+    getTask(id: ID!): Task
+    getProjectTasks(projectId: ID!): [Task!]!
+    getUserTasks: [Task!]!
 
     # Notification queries
-    myNotifications(limit: Int, offset: Int): [Notification!]!
-    unreadNotificationsCount: Int!
+    getUserNotifications(limit: Int, offset: Int): [Notification!]!
+    getUnreadNotificationCount: Int!
+
+    # Device queries
+    getUserDevices: [Device!]!
   }
 `;
