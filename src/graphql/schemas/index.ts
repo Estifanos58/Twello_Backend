@@ -100,8 +100,17 @@ export const typeDefsSchema = `#graphql
     createdAt: DateTime!
   }
 
-  type AuthResponse {
-    user: User!
-    accessToken: String!
+  type Device {
+    id: ID!
+    ipAddress: String
+    userAgent: String
+    loginTime: DateTime!
+    lastUsed: DateTime!
+    isRevoked: Boolean!
+  }
+
+  type ForgotPasswordResponse {
+    message: String!
+    resetCode: String
   }
 `;
