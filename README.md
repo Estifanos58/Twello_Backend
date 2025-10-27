@@ -2,6 +2,9 @@
 
 A modern, scalable collaborative project management backend built with cutting-edge technologies for enterprise-grade applications.
 
+<img width="832" height="613" alt="image" src="https://github.com/user-attachments/assets/c8a5a9a9-0d81-4ef1-a74d-51ac44524b7d" />
+
+
 ## 🚀 Overview
 
 Twello is a comprehensive backend solution for collaborative project management, featuring real-time capabilities, robust authentication, and a flexible role-based access control system. Built with performance and security in mind, it provides a solid foundation for building modern project management applications.
