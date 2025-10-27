@@ -1,7 +1,7 @@
 {
-  "name": "twello-backend",
+  "name": "collaborative-pm-backend",
   "version": "1.0.0",
-  "description": "Twello - Collaborative project management backend with Bun, Express, GraphQL, and PostgreSQL (Neon)",
+  "description": "Production-ready collaborative project management backend with Bun, Express, GraphQL, and PostgreSQL",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
@@ -20,8 +20,7 @@
     "graphql",
     "bun",
     "express",
-    "postgresql",
-    "neon"
+    "postgresql"
   ],
   "author": "",
   "license": "MIT",

@@ -23,7 +23,7 @@ if (isNeonDatabase) {
     connectionTimeoutMillis: 5000,
     ssl: config.env === 'production' ? { rejectUnauthorized: true } : undefined,
   });
-
+  
   // Pool event handlers for monitoring (pg only)
   pool.on('connect', () => {
     // Silent connect
@@ -50,11 +50,11 @@ export async function query<T extends QueryResultRow = any>(
   try {
     const result = await pool.query<T>(text, params);
     const duration = Date.now() - start;
-
+    
     if (config.env === 'development' && duration > 1000) {
       console.warn(`Slow query (${duration}ms):`, text.substring(0, 100));
     }
-
+    
     return result;
   } catch (error) {
     console.error('Database query error:', {
@@ -99,10 +99,10 @@ export async function transaction<T>(
  * Check database connection health
  * @returns true if healthy
  */
-export async function checkHealth(): Promise<boolean> {
+export async function healthCheck(): Promise<boolean> {
   try {
-    const result = await query('SELECT 1 as health_check');
-    return result.rows.length > 0;
+    const result = await query('SELECT 1 as health');
+    return result.rows[0]?.health === 1;
   } catch (error) {
     console.error('Database health check failed:', error);
     return false;
@@ -110,15 +110,37 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 /**
- * Close the database pool gracefully
+ * Gracefully close all database connections
  */
 export async function closePool(): Promise<void> {
-  try {
+  if ('end' in pool && typeof pool.end === 'function') {
     await pool.end();
-    console.log('Database pool closed');
-  } catch (error) {
-    console.error('Error closing database pool:', error);
   }
+  // Neon serverless pools don't need explicit cleanup
 }
 
+/**
+ * Helper to build WHERE conditions safely
+ * @param conditions Object with column-value pairs
+ * @returns Object with SQL WHERE clause and parameters
+ */
+export function buildWhereClause(conditions: Record<string, any>): {
+  whereClause: string;
+  params: any[];
+} {
+  const keys = Object.keys(conditions).filter((key) => conditions[key] !== undefined);
+  if (keys.length === 0) {
+    return { whereClause: '', params: [] };
+  }
+
+  const clauses = keys.map((key, index) => `${key} = $${index + 1}`);
+  const params = keys.map((key) => conditions[key]);
+
+  return {
+    whereClause: `WHERE ${clauses.join(' AND ')}`,
+    params,
+  };
+}
+
+export { pool };
 export default pool;

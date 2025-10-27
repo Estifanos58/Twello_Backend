@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { logError } from '../services/logger/index.js';
+import { logError } from '../services/loggingService.js';
 
 /**
  * Global error handler middleware
@@ -11,12 +11,10 @@ export function errorHandler(
   next: NextFunction
 ): void {
   // Log error
-  logError(err.message, { 
-    userId: (req as any).user?.id,
+  logError(err, req.user?.id, {
     method: req.method,
     path: req.path,
     body: req.body,
-    stack: err.stack,
   });
 
   // Don't leak error details in production

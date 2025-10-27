@@ -4,9 +4,9 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import config from './config/index.js';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { log } from './services/logger/index.js';
 import authRoutes from './routes/auth.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { log } from './services/loggingService.js';
 
 /**
  * Create and configure Express application
@@ -48,35 +48,54 @@ export function createServer(): Express {
 
   app.use(globalLimiter);
 
+  // Auth-specific rate limiting
+  const authLimiter = rateLimit({
+    windowMs: config.rateLimit.authWindowMs,
+    max: config.rateLimit.authMaxRequests,
+    message: 'Too many authentication attempts, please try again later',
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+  });
+
   // Health check endpoint
-  app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  app.get('/health', async (req, res) => {
+    try {
+      const { healthCheck } = await import('./db/pool.js');
+      const dbHealthy = await healthCheck();
+
+      res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        database: dbHealthy ? 'connected' : 'disconnected',
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: 'error',
+        message: 'Service unavailable',
+      });
+    }
   });
 
-  // API info endpoint
-  app.get('/', (req, res) => {
-    res.json({
-      name: 'Twello API',
-      version: '1.0.0',
-      description: 'Collaborative project management backend',
-      endpoints: {
-        graphql: '/graphql',
-        auth: '/api/auth',
-        health: '/health',
-      },
-    });
+  // REST routes
+  app.use('/auth', authLimiter, authRoutes);
+
+  // GraphQL will be added here via Apollo Server middleware
+  // This will be set up in index.ts
+
+  // Note: 404 and error handlers are added in index.ts after GraphQL middleware
+
+  // Log server start
+  log({
+    level: 'info',
+    action: 'SERVER_START',
+    details: {
+      env: config.env,
+      port: config.port,
+    },
+    category: 'SYSTEM_LOG',
   });
-
-  // Auth routes
-  app.use('/api/auth', authRoutes);
-
-  // 404 handler
-  app.use(notFoundHandler);
-
-  // Error handler (must be last)
-  app.use(errorHandler);
-
-  log({ level: 'info', action: 'Express server configured' });
 
   return app;
 }

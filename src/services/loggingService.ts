@@ -1,8 +1,8 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import Transport, { TransportStreamOptions } from 'winston-transport';
-import { query } from '../../db/pool.js';
-import config from '../../config/index.js';
+import { query } from '../db/pool.js';
+import config from '../config/index.js';
 import { mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 
@@ -17,19 +17,23 @@ export interface LogEntry {
   details?: Record<string, any>;
   category?: LogCategory;
 }
-
+/**
+ * Custom Winston transport for database logging
+ */
 class DatabaseTransport extends Transport {
   constructor(opts?: TransportStreamOptions) {
     super(opts);
   }
+
   log(info: any, callback: () => void): void {
     setImmediate(() => {
       this.emit('logged', info);
     });
+
     (async () => {
       try {
         await query(
-          `INSERT INTO audit_logs (timestamp, level, user_id, ip_address, action, details, category) \
+          `INSERT INTO audit_logs (timestamp, level, user_id, ip_address, action, details, category) 
            VALUES (now(), $1, $2, $3, $4, $5, $6)`,
           [
             info.level,
@@ -41,6 +45,7 @@ class DatabaseTransport extends Transport {
           ]
         );
       } catch (error) {
+        // Fallback: if DB is down, at least log to console
         console.error('Failed to write to audit_logs table:', error);
       } finally {
         callback();
@@ -49,11 +54,14 @@ class DatabaseTransport extends Transport {
   }
 }
 
+
+// Ensure log directory exists
 const logDir = dirname(config.logging.filePath);
 if (!existsSync(logDir)) {
   mkdirSync(logDir, { recursive: true });
 }
 
+// Create Winston logger with multiple transports
 const logger = winston.createLogger({
   level: config.logging.level,
   format: winston.format.combine(
@@ -63,6 +71,7 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'pm-backend' },
   transports: [
+    // File transport with daily rotation
     new DailyRotateFile({
       filename: config.logging.filePath.replace('.log', '-%DATE%.log'),
       datePattern: 'YYYY-MM-DD',
@@ -71,12 +80,14 @@ const logger = winston.createLogger({
       maxFiles: '14d',
       level: 'info',
     }),
+    // Database transport
     new DatabaseTransport({
       level: 'info',
     }),
   ],
 });
 
+// Add console transport in development
 if (config.env !== 'production') {
   logger.add(
     new winston.transports.Console({
@@ -88,8 +99,12 @@ if (config.env !== 'production') {
   );
 }
 
+/**
+ * Log an audit event to both file and database
+ */
 export function log(entry: LogEntry): void {
   const { level, userId, ipAddress, action, details, category } = entry;
+
   logger.log({
     level,
     userId,
@@ -101,6 +116,9 @@ export function log(entry: LogEntry): void {
   });
 }
 
+/**
+ * Log authentication failure
+ */
 export function logAuthFailure(email: string, ipAddress: string, reason: string): void {
   log({
     level: 'security',
@@ -111,6 +129,9 @@ export function logAuthFailure(email: string, ipAddress: string, reason: string)
   });
 }
 
+/**
+ * Log successful login
+ */
 export function logLoginSuccess(userId: string, ipAddress: string, userAgent?: string): void {
   log({
     level: 'info',
@@ -122,6 +143,9 @@ export function logLoginSuccess(userId: string, ipAddress: string, userAgent?: s
   });
 }
 
+/**
+ * Log logout
+ */
 export function logLogout(userId: string, ipAddress: string): void {
   log({
     level: 'info',
@@ -132,6 +156,9 @@ export function logLogout(userId: string, ipAddress: string): void {
   });
 }
 
+/**
+ * Log token refresh
+ */
 export function logTokenRefresh(userId: string, ipAddress: string): void {
   log({
     level: 'info',
@@ -142,6 +169,9 @@ export function logTokenRefresh(userId: string, ipAddress: string): void {
   });
 }
 
+/**
+ * Log admin action
+ */
 export function logAdminAction(
   adminId: string,
   action: string,
@@ -159,6 +189,9 @@ export function logAdminAction(
   });
 }
 
+/**
+ * Log task status change
+ */
 export function logTaskStatusChange(
   userId: string,
   taskId: string,
@@ -174,6 +207,9 @@ export function logTaskStatusChange(
   });
 }
 
+/**
+ * Log workspace creation
+ */
 export function logWorkspaceCreated(userId: string, workspaceId: string, name: string): void {
   log({
     level: 'info',
@@ -184,6 +220,9 @@ export function logWorkspaceCreated(userId: string, workspaceId: string, name: s
   });
 }
 
+/**
+ * Log project creation
+ */
 export function logProjectCreated(
   userId: string,
   projectId: string,
@@ -199,6 +238,9 @@ export function logProjectCreated(
   });
 }
 
+/**
+ * Log critical error
+ */
 export function logError(error: Error, userId?: string, context?: Record<string, any>): void {
   log({
     level: 'error',
@@ -213,6 +255,9 @@ export function logError(error: Error, userId?: string, context?: Record<string,
   });
 }
 
+/**
+ * Log device revocation
+ */
 export function logDeviceRevoked(userId: string, deviceId: string, ipAddress: string): void {
   log({
     level: 'info',

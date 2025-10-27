@@ -1,47 +1,56 @@
 import bcrypt from 'bcrypt';
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = 12;
 
 /**
  * Hash a password using bcrypt
- * @param password Plain text password
- * @returns Hashed password
  */
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS);
+  return await bcrypt.hash(password, SALT_ROUNDS);
 }
 
 /**
- * Compare a password with a hashed password
- * @param password Plain text password
- * @param hash Hashed password
- * @returns True if passwords match
+ * Compare a plain password with a hashed password
  */
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
+  return await bcrypt.compare(password, hash);
 }
 
 /**
  * Validate password strength
- * @param password Password to validate
- * @returns True if password meets requirements
+ * - At least 8 characters
+ * - Contains uppercase and lowercase
+ * - Contains numbers
+ * - Contains special characters
  */
-export function validatePasswordStrength(password: string): { valid: boolean; message?: string } {
-  if (password.length < 8) {
-    return { valid: false, message: 'Password must be at least 8 characters long' };
-  }
+export function validatePasswordStrength(password: string): {
+  valid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
 
-  if (!/[A-Z]/.test(password)) {
-    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  if (password.length < 8) {
+    errors.push('Password must be at least 8 characters long');
   }
 
   if (!/[a-z]/.test(password)) {
-    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+    errors.push('Password must contain at least one lowercase letter');
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
   }
 
   if (!/[0-9]/.test(password)) {
-    return { valid: false, message: 'Password must contain at least one number' };
+    errors.push('Password must contain at least one number');
   }
 
-  return { valid: true };
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    errors.push('Password must contain at least one special character');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }

@@ -1,6 +1,6 @@
-import { query, transaction } from '../db/pool.ts';
-import { logProjectCreated } from './logger/loggingService.ts';
-import type { ProjectRole } from './authorizationService.ts';
+import { query, transaction } from '../db/pool.js';
+import { logProjectCreated } from './loggingService.js';
+import type { ProjectRole } from './authorizationService.js';
 
 export interface Project {
   id: string;

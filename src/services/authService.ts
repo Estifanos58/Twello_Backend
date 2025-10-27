@@ -8,7 +8,13 @@ import {
   getRefreshTokenExpiry,
   generateResetCode,
 } from '../utils/jwt.js';
-import { logInfo, logError } from './logger/index.js';
+import {
+  logLoginSuccess,
+  logAuthFailure,
+  logLogout,
+  logTokenRefresh,
+  logDeviceRevoked,
+} from './loggingService.js';
 
 export interface User {
   id: string;
@@ -39,40 +45,33 @@ export async function registerUser(
   password: string,
   fullName?: string
 ): Promise<User> {
-  try {
-    // Check if user already exists
-    const existingUser = await query<User>(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
+  // Check if user already exists
+  const existingUser = await query<User>(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
 
-    if (existingUser.rows.length > 0) {
-      throw new Error('User with this email already exists');
-    }
-
-    // Hash password
-    const passwordHash = await hashPassword(password);
-
-    // Insert new user
-    const result = await query<User>(
-      `INSERT INTO users (email, password_hash, full_name, role, global_status) 
-       VALUES ($1, $2, $3, 'USER', 'ACTIVE') 
-       RETURNING *`,
-      [email, passwordHash, fullName || null]
-    );
-
-    const user = result.rows[0];
-
-    logInfo(`New user registered: ${email}`);
-
-    // Remove password hash from returned user
-    delete (user as any).password_hash;
-
-    return user;
-  } catch (error) {
-    logError(`Registration failed for ${email}: ${error}`);
-    throw error;
+  if (existingUser.rows.length > 0) {
+    throw new Error('User with this email already exists');
   }
+
+  // Hash password
+  const passwordHash = await hashPassword(password);
+
+  // Insert new user
+  const result = await query<User>(
+    `INSERT INTO users (email, password_hash, full_name, role, global_status) 
+     VALUES ($1, $2, $3, 'USER', 'ACTIVE') 
+     RETURNING *`,
+    [email, passwordHash, fullName || null]
+  );
+
+  const user = result.rows[0];
+
+  // Remove password hash from returned user
+  delete (user as any).password_hash;
+
+  return user;
 }
 
 /**
@@ -83,347 +82,344 @@ export async function login(
   password: string,
   deviceInfo: DeviceInfo
 ): Promise<{ user: User; tokens: AuthTokens }> {
-  try {
-    // Find user by email
-    const result = await query<User>(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
+  // Find user by email
+  const result = await query<User>(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
+
+  if (result.rows.length === 0) {
+    logAuthFailure(email, deviceInfo.ipAddress, 'User not found');
+    throw new Error('Invalid credentials');
+  }
+
+  const user = result.rows[0];
+
+  // Check if user is banned
+  if (user.global_status === 'BANNED') {
+    logAuthFailure(email, deviceInfo.ipAddress, 'User is banned');
+    throw new Error('Account has been banned');
+  }
+
+  // Verify password
+  const isValidPassword = await comparePassword(password, user.password_hash);
+
+  if (!isValidPassword) {
+    logAuthFailure(email, deviceInfo.ipAddress, 'Invalid password');
+    throw new Error('Invalid credentials');
+  }
+
+  // Generate tokens
+  const jti = generateJTI();
+  const accessToken = await createAccessToken(user.id, user.role);
+  const refreshToken = await createRefreshToken(user.id, jti);
+
+  // Store device and refresh token
+  await transaction(async (client) => {
+    // Insert device record
+    const deviceResult = await client.query(
+      `INSERT INTO user_devices (user_id, jti, ip_address, user_agent) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id`,
+      [user.id, jti, deviceInfo.ipAddress, deviceInfo.userAgent]
     );
 
-    if (result.rows.length === 0) {
-      logInfo(`Login failed for ${email}: User not found from ${deviceInfo.ipAddress}`);
-      throw new Error('Invalid credentials');
-    }
+    const deviceId = deviceResult.rows[0].id;
 
-    const user = result.rows[0];
+    // Insert refresh token record
+    await client.query(
+      `INSERT INTO refresh_tokens (jti, user_id, device_id, expires_at) 
+       VALUES ($1, $2, $3, $4)`,
+      [jti, user.id, deviceId, getRefreshTokenExpiry()]
+    );
+  });
 
-    // Check if user is banned
-    if (user.global_status === 'BANNED') {
-      logInfo(`Login failed for ${email}: User is banned from ${deviceInfo.ipAddress}`);
-      throw new Error('Account has been banned');
-    }
+  // Log successful login
+  logLoginSuccess(user.id, deviceInfo.ipAddress, deviceInfo.userAgent);
 
-    // Verify password
-    const isValidPassword = await comparePassword(password, user.password_hash);
+  // Remove password hash from returned user
+  delete (user as any).password_hash;
 
-    if (!isValidPassword) {
-      logInfo(`Login failed for ${email}: Invalid password from ${deviceInfo.ipAddress}`);
-      throw new Error('Invalid credentials');
-    }
-
-    // Generate tokens
-    const jti = generateJTI();
-    const accessToken = await createAccessToken(user.id, user.role);
-    const refreshToken = await createRefreshToken(user.id, jti);
-
-    // Store device and refresh token
-    await transaction(async (client) => {
-      // Insert device record
-      const deviceResult = await client.query(
-        `INSERT INTO user_devices (user_id, jti, ip_address, user_agent) 
-         VALUES ($1, $2, $3, $4) 
-         RETURNING id`,
-        [user.id, jti, deviceInfo.ipAddress, deviceInfo.userAgent]
-      );
-
-      const deviceId = deviceResult.rows[0].id;
-
-      // Insert refresh token record
-      await client.query(
-        `INSERT INTO refresh_tokens (jti, user_id, device_id, expires_at) 
-         VALUES ($1, $2, $3, $4)`,
-        [jti, user.id, deviceId, getRefreshTokenExpiry()]
-      );
-    });
-
-    logInfo(`User logged in: ${email} from ${deviceInfo.ipAddress}`);
-
-    // Remove password hash from returned user
-    delete (user as any).password_hash;
-
-    return {
-      user,
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
-    };
-  } catch (error) {
-    logError(`Login error for ${email}: ${error}`);
-    throw error;
-  }
+  return {
+    user,
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
+  };
 }
 
 /**
- * Refresh access token
+ * Refresh access token using refresh token
  */
 export async function refreshAccessToken(
   refreshToken: string,
   deviceInfo: DeviceInfo
 ): Promise<AuthTokens> {
+  // Verify refresh token
+  let payload;
   try {
-    // Verify refresh token
-    const payload = await verifyRefreshToken(refreshToken);
-
-    // Check if token exists and is not revoked
-    const tokenResult = await query(
-      `SELECT rt.*, ud.ip_address, ud.user_agent 
-       FROM refresh_tokens rt
-       JOIN user_devices ud ON rt.device_id = ud.id
-       WHERE rt.jti = $1 AND rt.revoked_at IS NULL`,
-      [payload?.jti]
-    );
-
-    if (tokenResult.rows.length === 0) {
-      throw new Error('Invalid or revoked refresh token');
-    }
-
-    const tokenRecord = tokenResult.rows[0];
-
-    // Verify device info matches
-    if (
-      tokenRecord.ip_address !== deviceInfo.ipAddress ||
-      tokenRecord.user_agent !== deviceInfo.userAgent
-    ) {
-      logInfo(
-        `Suspicious token refresh attempt for user ${payload.sub} from different device`
-      );
-      // Optionally revoke the token here
-    }
-
-    // Generate new tokens
-    const newJti = generateJTI();
-    const accessToken = await createAccessToken(
-      payload.sub,
-      payload.role || 'USER'
-    );
-    const newRefreshToken = await createRefreshToken(payload.sub, newJti);
-
-    // Update refresh token
-    await transaction(async (client) => {
-      // Revoke old token
-      await client.query(
-        'UPDATE refresh_tokens SET revoked_at = NOW() WHERE jti = $1',
-        [payload.jti]
-      );
-
-      // Insert new token
-      await client.query(
-        `INSERT INTO refresh_tokens (jti, user_id, device_id, expires_at) 
-         VALUES ($1, $2, $3, $4)`,
-        [newJti, payload.sub, tokenRecord.device_id, getRefreshTokenExpiry()]
-      );
-
-      // Update device JTI
-      await client.query('UPDATE user_devices SET jti = $1 WHERE id = $2', [
-        newJti,
-        tokenRecord.device_id,
-      ]);
-    });
-
-    logInfo(`Token refreshed for user ${payload.sub}`);
-
-    return {
-      accessToken,
-      refreshToken: newRefreshToken,
-    };
+    payload = await verifyRefreshToken(refreshToken);
   } catch (error) {
-    logError(`Token refresh error: ${error}`);
-    throw error;
+    throw new Error('Invalid or expired refresh token');
   }
+
+  const { sub: userId, jti: oldJti } = payload;
+
+  // Check if refresh token exists and is not revoked
+  const tokenResult = await query(
+    `SELECT rt.*, ud.is_revoked as device_revoked 
+     FROM refresh_tokens rt
+     JOIN user_devices ud ON ud.jti = rt.jti
+     WHERE rt.jti = $1 AND rt.user_id = $2`,
+    [oldJti, userId]
+  );
+
+  if (tokenResult.rows.length === 0) {
+    throw new Error('Refresh token not found');
+  }
+
+  const tokenRecord = tokenResult.rows[0];
+
+  if (tokenRecord.is_revoked || tokenRecord.device_revoked) {
+    throw new Error('Refresh token has been revoked');
+  }
+
+  // Get user info
+  const userResult = await query<User>(
+    'SELECT * FROM users WHERE id = $1',
+    [userId]
+  );
+
+  if (userResult.rows.length === 0) {
+    throw new Error('User not found');
+  }
+
+  const user = userResult.rows[0];
+
+  if (user.global_status === 'BANNED') {
+    throw new Error('Account has been banned');
+  }
+
+  // Rotate refresh token
+  const newJti = generateJTI();
+  const newAccessToken = await createAccessToken(user.id, user.role);
+  const newRefreshToken = await createRefreshToken(user.id, newJti);
+
+  await transaction(async (client) => {
+    // Revoke old refresh token
+    await client.query(
+      'UPDATE refresh_tokens SET is_revoked = true WHERE jti = $1',
+      [oldJti]
+    );
+
+    await client.query(
+      'UPDATE user_devices SET is_revoked = true WHERE jti = $1',
+      [oldJti]
+    );
+
+    // Create new device record
+    const deviceResult = await client.query(
+      `INSERT INTO user_devices (user_id, jti, ip_address, user_agent) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id`,
+      [userId, newJti, deviceInfo.ipAddress, deviceInfo.userAgent]
+    );
+
+    const newDeviceId = deviceResult.rows[0].id;
+
+    // Insert new refresh token
+    await client.query(
+      `INSERT INTO refresh_tokens (jti, user_id, device_id, expires_at) 
+       VALUES ($1, $2, $3, $4)`,
+      [newJti, userId, newDeviceId, getRefreshTokenExpiry()]
+    );
+
+    // Update device last_used
+    await client.query(
+      'UPDATE user_devices SET last_used = now() WHERE id = $1',
+      [newDeviceId]
+    );
+  });
+
+  logTokenRefresh(userId, deviceInfo.ipAddress);
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  };
 }
 
 /**
  * Logout and revoke refresh token
  */
-export async function logout(
-  refreshToken: string,
-  ipAddress: string
-): Promise<void> {
+export async function logout(refreshToken: string, ipAddress: string): Promise<void> {
   try {
     const payload = await verifyRefreshToken(refreshToken);
+    const { jti, sub: userId } = payload;
 
-    await query(
-      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE jti = $1',
-      [payload.jti]
-    );
+    // Revoke the refresh token and device
+    await transaction(async (client) => {
+      await client.query(
+        'UPDATE refresh_tokens SET is_revoked = true WHERE jti = $1',
+        [jti]
+      );
 
-    logInfo(`User logged out: ${payload.sub} from ${ipAddress}`);
+      await client.query(
+        'UPDATE user_devices SET is_revoked = true WHERE jti = $1',
+        [jti]
+      );
+    });
+
+    logLogout(userId, ipAddress);
   } catch (error) {
-    logError(`Logout error: ${error}`);
-    // Don't throw error on logout
+    // Even if token is invalid, don't throw error on logout
+    console.error('Logout error:', error);
   }
 }
 
 /**
- * Update user password
+ * Revoke a specific device/session
  */
-export async function updateUserPassword(
-  userId: string,
-  oldPassword: string,
-  newPassword: string
-): Promise<void> {
-  try {
-    const result = await query<User>(
-      'SELECT * FROM users WHERE id = $1',
-      [userId]
-    );
+export async function revokeDevice(userId: string, deviceId: string, ipAddress: string): Promise<void> {
+  // Verify device belongs to user
+  const deviceResult = await query(
+    'SELECT * FROM user_devices WHERE id = $1 AND user_id = $2',
+    [deviceId, userId]
+  );
 
-    if (result.rows.length === 0) {
-      throw new Error('User not found');
-    }
-
-    const user = result.rows[0];
-
-    // Verify old password
-    const isValidPassword = await comparePassword(oldPassword, user.password_hash);
-
-    if (!isValidPassword) {
-      throw new Error('Invalid current password');
-    }
-
-    // Hash new password
-    const newPasswordHash = await hashPassword(newPassword);
-
-    // Update password
-    await query(
-      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [newPasswordHash, userId]
-    );
-
-    logInfo(`Password updated for user ${userId}`);
-  } catch (error) {
-    logError(`Password update error for user ${userId}: ${error}`);
-    throw error;
+  if (deviceResult.rows.length === 0) {
+    throw new Error('Device not found');
   }
+
+  const device = deviceResult.rows[0];
+
+  // Revoke device and associated tokens
+  await transaction(async (client) => {
+    await client.query(
+      'UPDATE user_devices SET is_revoked = true WHERE id = $1',
+      [deviceId]
+    );
+
+    await client.query(
+      'UPDATE refresh_tokens SET is_revoked = true WHERE jti = $1',
+      [device.jti]
+    );
+  });
+
+  logDeviceRevoked(userId, deviceId, ipAddress);
+}
+
+/**
+ * Get all active devices for a user
+ */
+export async function getUserDevices(userId: string) {
+  const result = await query(
+    `SELECT id, ip_address, user_agent, login_time, last_used, is_revoked 
+     FROM user_devices 
+     WHERE user_id = $1 
+     ORDER BY login_time DESC`,
+    [userId]
+  );
+
+  return result.rows;
 }
 
 /**
  * Generate password reset code
  */
 export async function generatePasswordResetCode(email: string): Promise<string> {
-  try {
-    const result = await query<User>(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
+  // Find user
+  const userResult = await query<User>(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
 
-    if (result.rows.length === 0) {
-      // Don't reveal if user exists
-      logInfo(`Password reset requested for non-existent email: ${email}`);
-      return generateResetCode(); // Return fake code
-    }
-
-    const user = result.rows[0];
-    const code = generateResetCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    // Store reset code
-    await query(
-      `INSERT INTO password_reset_codes (user_id, code, expires_at) 
-       VALUES ($1, $2, $3)`,
-      [user.id, code, expiresAt]
-    );
-
-    logInfo(`Password reset code generated for user ${user.id}`);
-
-    return code;
-  } catch (error) {
-    logError(`Error generating password reset code: ${error}`);
-    throw error;
+  if (userResult.rows.length === 0) {
+    // Don't reveal if user exists
+    throw new Error('If the email exists, a reset code will be sent');
   }
+
+  const user = userResult.rows[0];
+  const code = generateResetCode();
+  const codeHash = await hashPassword(code);
+
+  // Store reset code (expires in 1 hour)
+  await query(
+    `INSERT INTO password_resets (user_id, code_hash, expires_at) 
+     VALUES ($1, $2, now() + interval '1 hour')`,
+    [user.id, codeHash]
+  );
+
+  // In production, send email with code
+  // For now, return code for testing
+  return code;
 }
 
 /**
- * Reset password with code
+ * Reset password using code
  */
 export async function resetPasswordWithCode(
   email: string,
   code: string,
   newPassword: string
 ): Promise<void> {
-  try {
-    const result = await query(
-      `SELECT prc.*, u.id as user_id
-       FROM password_reset_codes prc
-       JOIN users u ON prc.user_id = u.id
-       WHERE u.email = $1 AND prc.code = $2 AND prc.used_at IS NULL AND prc.expires_at > NOW()
-       ORDER BY prc.created_at DESC
-       LIMIT 1`,
-      [email, code]
+  // Find user
+  const userResult = await query<User>(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
+
+  if (userResult.rows.length === 0) {
+    throw new Error('Invalid reset code');
+  }
+
+  const user = userResult.rows[0];
+
+  // Find valid reset code
+  const resetResult = await query(
+    `SELECT * FROM password_resets 
+     WHERE user_id = $1 AND used = false AND expires_at > now() 
+     ORDER BY created_at DESC LIMIT 1`,
+    [user.id]
+  );
+
+  if (resetResult.rows.length === 0) {
+    throw new Error('Invalid or expired reset code');
+  }
+
+  const resetRecord = resetResult.rows[0];
+
+  // Verify code
+  const isValidCode = await comparePassword(code, resetRecord.code_hash);
+
+  if (!isValidCode) {
+    throw new Error('Invalid reset code');
+  }
+
+  // Update password and mark code as used
+  const newPasswordHash = await hashPassword(newPassword);
+
+  await transaction(async (client) => {
+    await client.query(
+      'UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2',
+      [newPasswordHash, user.id]
     );
 
-    if (result.rows.length === 0) {
-      throw new Error('Invalid or expired reset code');
-    }
-
-    const resetRecord = result.rows[0];
-
-    // Hash new password
-    const newPasswordHash = await hashPassword(newPassword);
-
-    // Update password and mark code as used
-    await transaction(async (client) => {
-      await client.query(
-        'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-        [newPasswordHash, resetRecord.user_id]
-      );
-
-      await client.query(
-        'UPDATE password_reset_codes SET used_at = NOW() WHERE id = $1',
-        [resetRecord.id]
-      );
-    });
-
-    logInfo(`Password reset successfully for user ${resetRecord.user_id}`);
-  } catch (error) {
-    logError(`Password reset error: ${error}`);
-    throw error;
-  }
-}
-
-/**
- * Get user devices
- */
-export async function getUserDevices(userId: string): Promise<any[]> {
-  try {
-    const result = await query(
-      `SELECT id, jti, ip_address, user_agent, last_used_at, created_at
-       FROM user_devices
-       WHERE user_id = $1 AND revoked_at IS NULL
-       ORDER BY last_used_at DESC`,
-      [userId]
+    await client.query(
+      'UPDATE password_resets SET used = true WHERE id = $1',
+      [resetRecord.id]
     );
 
-    return result.rows;
-  } catch (error) {
-    logError(`Error fetching user devices: ${error}`);
-    throw error;
-  }
-}
+    // Revoke all existing sessions for security
+    await client.query(
+      'UPDATE user_devices SET is_revoked = true WHERE user_id = $1',
+      [user.id]
+    );
 
-/**
- * Revoke device
- */
-export async function revokeDevice(userId: string, deviceId: string): Promise<void> {
-  try {
-    await transaction(async (client) => {
-      // Revoke device
-      await client.query(
-        'UPDATE user_devices SET revoked_at = NOW() WHERE id = $1 AND user_id = $2',
-        [deviceId, userId]
-      );
-
-      // Revoke associated refresh tokens
-      await client.query(
-        'UPDATE refresh_tokens SET revoked_at = NOW() WHERE device_id = $1',
-        [deviceId]
-      );
-    });
-
-    logInfo(`Device ${deviceId} revoked for user ${userId}`);
-  } catch (error) {
-    logError(`Error revoking device: ${error}`);
-    throw error;
-  }
+    await client.query(
+      'UPDATE refresh_tokens SET is_revoked = true WHERE user_id = $1',
+      [user.id]
+    );
+  });
 }

@@ -2,16 +2,10 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { getClientIp, getUserAgent } from '../middleware/authMiddleware.js';
 import { login, logout, refreshAccessToken } from '../services/authService.js';
+import { loginSchema } from '../utils/validation.js';
 import config from '../config/index.js';
-import { z } from 'zod';
 
 const router = Router();
-
-// Login validation schema
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address').toLowerCase(),
-  password: z.string().min(1, 'Password is required'),
-});
 
 /**
  * POST /auth/login

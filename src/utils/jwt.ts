@@ -1,124 +1,143 @@
-import * as jose from 'jose';
+import { SignJWT, jwtVerify } from 'jose';
 import config from '../config/index.js';
 import { randomBytes } from 'crypto';
 
+// Convert secrets to Uint8Array for jose
+const accessTokenSecret = new TextEncoder().encode(config.jwt.accessTokenSecret);
+const refreshTokenSecret = new TextEncoder().encode(config.jwt.refreshTokenSecret);
+
 export interface AccessTokenPayload {
-  sub: string; // user ID
-  role: string;
+  sub: string; // user id
+  role: string; // global role (USER, ADMIN)
+  typ: 'access';
+  [key: string]: unknown;
 }
 
 export interface RefreshTokenPayload {
-  sub: string; // user ID
-  jti: string; // JWT ID for tracking
-  role?: string;
+  sub: string; // user id
+  jti: string; // unique token id
+  typ: 'refresh';
+  [key: string]: unknown;
+}
+
+/**
+ * Parse TTL string (e.g., "15m", "30d") to seconds
+ */
+function parseTTL(ttl: string): number {
+  const match = ttl.match(/^(\d+)([smhd])$/);
+  if (!match) {
+    throw new Error(`Invalid TTL format: ${ttl}`);
+  }
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+
+  const multipliers: Record<string, number> = {
+    s: 1,
+    m: 60,
+    h: 3600,
+    d: 86400,
+  };
+
+  return value * multipliers[unit];
+}
+
+/**
+ * Generate a unique JWT ID (jti)
+ */
+export function generateJTI(): string {
+  return randomBytes(32).toString('hex');
 }
 
 /**
  * Create an access token
  */
 export async function createAccessToken(userId: string, role: string): Promise<string> {
-  const secret = new TextEncoder().encode(config.jwt.accessTokenSecret);
-  
-  const token = await new jose.SignJWT({ role })
+  const ttlSeconds = parseTTL(config.jwt.accessTokenTTL);
+
+  const token = await new SignJWT({
+    sub: userId,
+    role,
+    typ: 'access',
+  } as AccessTokenPayload)
     .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(userId)
     .setIssuedAt()
-    .setExpirationTime(config.jwt.accessTokenTTL)
-    .sign(secret);
+    .setExpirationTime(`${ttlSeconds}s`)
+    .sign(accessTokenSecret);
 
   return token;
 }
 
 /**
- * Create a refresh token
+ * Create a refresh token with JTI
  */
 export async function createRefreshToken(userId: string, jti: string): Promise<string> {
-  const secret = new TextEncoder().encode(config.jwt.refreshTokenSecret);
-  
-  const token = await new jose.SignJWT({ jti })
+  const ttlSeconds = parseTTL(config.jwt.refreshTokenTTL);
+
+  const token = await new SignJWT({
+    sub: userId,
+    jti,
+    typ: 'refresh',
+  } as RefreshTokenPayload)
     .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(userId)
     .setIssuedAt()
-    .setExpirationTime(config.jwt.refreshTokenTTL)
-    .sign(secret);
+    .setExpirationTime(`${ttlSeconds}s`)
+    .sign(refreshTokenSecret);
 
   return token;
 }
 
 /**
- * Verify an access token
+ * Verify and decode an access token
  */
 export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
   try {
-    const secret = new TextEncoder().encode(config.jwt.accessTokenSecret);
-    const { payload } = await jose.jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, accessTokenSecret);
     
-    if (!payload.sub) {
-      throw new Error('Invalid token: missing subject');
+    if (payload.typ !== 'access') {
+      throw new Error('Invalid token type');
     }
-    
-    return {
-      sub: payload.sub,
-      role: (payload.role as string) || 'USER',
-    };
+
+    return payload as unknown as AccessTokenPayload;
   } catch (error) {
-    throw new Error('Invalid or expired access token');
+    if (error instanceof Error) {
+      throw new Error(`Invalid access token: ${error.message}`);
+    }
+    throw new Error('Invalid access token');
   }
 }
 
 /**
- * Verify a refresh token
+ * Verify and decode a refresh token
  */
 export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
   try {
-    const secret = new TextEncoder().encode(config.jwt.refreshTokenSecret);
-    const { payload } = await jose.jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, refreshTokenSecret);
     
-    if (!payload.sub || !payload.jti) {
-      throw new Error('Invalid token: missing required claims');
+    if (payload.typ !== 'refresh') {
+      throw new Error('Invalid token type');
     }
-    
-    return {
-      sub: payload.sub,
-      jti: payload.jti as string,
-      role: payload.role as string | undefined,
-    };
+
+    return payload as unknown as RefreshTokenPayload;
   } catch (error) {
-    throw new Error('Invalid or expired refresh token');
+    if (error instanceof Error) {
+      throw new Error(`Invalid refresh token: ${error.message}`);
+    }
+    throw new Error('Invalid refresh token');
   }
 }
 
 /**
- * Generate a unique JWT ID
- */
-export function generateJTI(): string {
-  return randomBytes(16).toString('hex');
-}
-
-/**
- * Get refresh token expiry date
+ * Get token expiration time in milliseconds
  */
 export function getRefreshTokenExpiry(): Date {
-  // Default to 30 days
-  const days = 30;
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const ttlSeconds = parseTTL(config.jwt.refreshTokenTTL);
+  return new Date(Date.now() + ttlSeconds * 1000);
 }
 
 /**
- * Generate a password reset code
+ * Generate a secure random code for password reset
  */
 export function generateResetCode(): string {
-  // Generate a 6-digit code
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-/**
- * Decode a token without verifying it
- */
-export function decodeToken(token: string): jose.JWTPayload | null {
-  try {
-    return jose.decodeJwt(token);
-  } catch (error) {
-    return null;
-  }
+  return randomBytes(32).toString('hex');
 }

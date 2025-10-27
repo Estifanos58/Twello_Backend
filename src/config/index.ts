@@ -38,6 +38,10 @@ interface Config {
   passwordReset: {
     tokenTTL: number;
   };
+  ai: {
+    geminiApiKey?: string;
+    geminiEndpoint?: string;
+  };
 }
 
 const config: Config = {
@@ -45,7 +49,7 @@ const config: Config = {
   port: parseInt(process.env.PORT || '4000', 10),
   host: process.env.HOST || '0.0.0.0',
   database: {
-    url: process.env.DATABASE_URL || '',
+    url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/pmdb',
     poolMin: parseInt(process.env.DB_POOL_MIN || '2', 10),
     poolMax: parseInt(process.env.DB_POOL_MAX || '10', 10),
   },
@@ -76,6 +80,12 @@ const config: Config = {
   passwordReset: {
     tokenTTL: parseInt(process.env.PASSWORD_RESET_TOKEN_TTL || '3600000', 10),
   },
+  ai: {
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    geminiEndpoint:
+      process.env.GEMINI_API_ENDPOINT ||
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+  },
 };
 
 // Validate critical configuration
@@ -89,10 +99,6 @@ if (config.env === 'production') {
   if (!config.cookie.secure) {
     console.warn('WARNING: Cookies should be secure in production');
   }
-}
-
-if (!config.database.url) {
-  throw new Error('DATABASE_URL is required');
 }
 
 export default config;
