@@ -1,6 +1,7 @@
 import { query, transaction } from '../db/pool.js';
 import { logTaskStatusChange } from './loggingService.js';
 import { createNotification } from './notificationService.js';
+import { pubsub, TASK_STATUS_UPDATED } from '../graphql/pubsub.js';
 
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 
@@ -185,9 +186,23 @@ export async function updateTask(
 
       task = taskResult.rows[0];
 
-      // Log status change
+      // Log status change and publish subscription event
       if (updates.status && updates.status !== oldStatus) {
         logTaskStatusChange(userId, taskId, oldStatus, updates.status);
+        try {
+          // Publish the task status update so subscribers can react.
+          // Payload key matches the subscription field name: `taskStatusUpdated`.
+          await pubsub.publish(TASK_STATUS_UPDATED, {
+            taskStatusUpdated: {
+              taskId,
+              oldStatus,
+              newStatus: updates.status,
+              task,
+            },
+          });
+        } catch (err) {
+          // Swallow pubsub errors so they don't prevent the transaction from completing.
+        }
       }
     } else {
       task = currentTask.rows[0];

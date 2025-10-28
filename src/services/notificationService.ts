@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import { pubsub, NOTIFICATION_ADDED } from '../graphql/pubsub.js';
 
 export type NotificationStatus = 'DELIVERED' | 'SEEN';
 
@@ -29,6 +30,14 @@ export async function createNotification(
      RETURNING *`,
     [recipientId, title, body, relatedEntityId || null, relatedEntityType || null]
   );
+
+  // Publish the notification event for subscribers, include recipientId so subscribers can filter on it
+  try {
+    const created = result.rows[0];
+    // payload key should match the subscription field name: `notificationAdded`
+    await pubsub.publish(NOTIFICATION_ADDED, { notificationAdded: { recipientId, notification: created } });
+  } catch (err) { 
+  }
 
   return result.rows[0];
 }
